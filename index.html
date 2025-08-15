@@ -1,386 +1,95 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Climb+ — HTML5 Physics Hill Climber</title>
-<meta name="description" content="A refined 2D hill-climb game. Physics car, springy suspension, infinite noise terrain, mobile controls.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Ctext y='1em' font-size='96'%3E🚙%3C/text%3E%3C/svg%3E">
-<style>
-  :root{
-    --bg:#0a0f1f; --panel:#0f172a; --ink:#e5e7eb; --muted:#9ca3af;
-    --accent:#22d3ee; --accent2:#a78bfa; --danger:#fb7185; --ok:#34d399;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0; color:var(--ink); background:
-    radial-gradient(1200px 600px at 10% -20%, #1c2544 0, #0a0f1f 60%) fixed, var(--bg);
-    font:16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;}
-  header{position:sticky; top:0; z-index:5; backdrop-filter: blur(8px);
-    background:linear-gradient(180deg, rgba(15,23,42,.9), rgba(15,23,42,.5));
-    border-bottom:1px solid rgba(255,255,255,.06)}
-  .wrap{max-width:1100px; margin:0 auto; padding:14px 16px}
-  .row{display:flex; align-items:center; justify-content:space-between; gap:12px}
-  .brand{display:flex; gap:10px; align-items:center; font-weight:800}
-  .pill{display:inline-flex; align-items:center; gap:8px; padding:8px 12px;
-    border:1px solid rgba(255,255,255,.14); border-radius:999px; color:inherit; text-decoration:none}
-  .pill:hover{border-color:rgba(255,255,255,.28)}
-  main{padding:20px 16px 40px}
-  .grid{display:grid; grid-template-columns:1.1fr .9fr; gap:16px}
-  @media (max-width:960px){ .grid{grid-template-columns:1fr} }
-  .card{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-    border:1px solid rgba(255,255,255,.08); border-radius:20px; padding:16px;
-    box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05)}
-  .cta{display:flex; flex-wrap:wrap; gap:10px}
-  .btn{border:0; padding:10px 14px; border-radius:12px; font-weight:700; cursor:pointer}
-  .btn.primary{background:linear-gradient(90deg, var(--accent), var(--accent2)); color:#0a0f1f}
-  .btn.secondary{background:transparent; color:var(--ink); border:1px solid rgba(255,255,255,.14)}
-  .stats{display:flex; flex-wrap:wrap; gap:12px; color:var(--muted); margin-top:8px}
-  .stat{padding:6px 10px; border:1px dashed rgba(255,255,255,.16); border-radius:999px}
-  .game-wrap{position:relative; border-radius:16px; overflow:hidden;
-    border:1px solid rgba(255,255,255,.08); background:#0b1025}
-  /* Canvas is created by Matter; we size its container. */
-  #stage{aspect-ratio:16/9; width:100%; max-width:900px; margin:0 auto; display:block}
-
-  /* HUD */
-  .hud{position:absolute; right:12px; bottom:12px; display:flex; gap:10px; align-items:center;
-    background:rgba(2,6,23,.45); border:1px solid rgba(255,255,255,.18); padding:6px 10px; border-radius:12px}
-  .hud strong{color:var(--ok)}
-  .pause{position:absolute; right:12px; top:12px; background:rgba(2,6,23,.45);
-    border:1px solid rgba(255,255,255,.18); padding:6px 10px; border-radius:10px; color:var(--ink)}
-  .overlay{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    background:linear-gradient(180deg, rgba(2,6,23,.55), rgba(2,6,23,.25)); backdrop-filter: blur(2px)}
-  .panel{max-width:520px; width:100%; padding:18px; border-radius:16px;
-    background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); border:1px solid rgba(255,255,255,.12)}
-  .kbd{padding:2px 6px; border-radius:6px; border:1px solid rgba(255,255,255,.24); font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
-
-  /* Mobile controls */
-  .touchpad{position:absolute; left:8px; bottom:8px; display:grid; grid-template-columns:repeat(3,64px); gap:8px; user-select:none; opacity:.9}
-  .tpbtn{width:64px; height:64px; border-radius:14px; border:1px solid rgba(255,255,255,.15);
-    background:rgba(255,255,255,.06); color:var(--ink); font-weight:800}
-  @media (min-width:900px){ .touchpad{display:none} }
-  footer{padding:28px 16px; text-align:center; color:var(--muted)}
-</style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Climb+ — Refined Hill Climb Game</title>
+  <style>
+    body, html { margin:0; padding:0; height:100%; background:#0a0f1f; color:#eee; font:16px sans-serif; }
+    #stage { position:relative; width:100%; height:400px; max-width:900px; margin:auto; background:#0b1025; overflow:hidden; }
+    .overlay, .btn, .hud, .touchpad { /* minimal styling, for brevity */ }
+    #overlay { position:absolute; inset:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; color:#fff; }
+    #overlay.hidden { display:none; }
+    #hud { position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.5); padding:6px; border-radius:4px; }
+    .hud { color:#0f0; }
+  </style>
 </head>
 <body>
-<header>
-  <div class="wrap row">
-    <div class="brand">🚙 <span>Climb+</span></div>
-    <nav class="row" style="gap:8px">
-      <a class="pill" href="#play">Play</a>
-      <a class="pill" href="#how">How</a>
-      <a class="pill" href="#tuning">Tuning</a>
-    </nav>
+  <div id="stage">
+    <div id="overlay">
+      <div>
+        <h2>Tap Start to Drive</h2>
+        <button id="startBtn">Start</button>
+      </div>
+    </div>
+    <div id="hud">Distance: <span id="dist">0 m</span></div>
   </div>
-</header>
 
-<main class="wrap">
-  <section class="grid">
-    <div class="card">
-      <h1>Climb+, a refined hill-climb game</h1>
-      <p>Springy suspension, torque control, and endless, noise-based terrain. Works on keyboard and touch.</p>
-      <div class="cta">
-        <a class="btn primary" href="#play">▶ Play</a>
-        <button class="btn secondary" id="resetBtn">Reset best time</button>
-      </div>
-      <div class="stats">
-        <span class="stat">Best distance: <strong id="best">0 m</strong></span>
-        <span class="stat">FPS: <strong id="fps">0</strong></span>
-        <span class="stat">Controls: <span class="kbd">←/→</span> throttle • <span class="kbd">↑/↓</span> pitch • <span class="kbd">P</span> pause</span>
-      </div>
-    </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+  <script type="module">
+    import { createNoise2D } from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm';
+    const { Engine, Render, Runner, World, Bodies, Body, Constraint, Events } = Matter;
 
-    <div id="play" class="card game-wrap">
-      <!-- Matter will inject a canvas into this div -->
-      <div id="stage"></div>
-      <button class="pause" id="pauseBtn">⏸</button>
-      <div class="hud">Distance: <strong id="dist">0 m</strong></div>
+    // Basic tuning
+    const SEG_W = 60, AMP = 100, SCALE = 0.003;
+    const carSetting = { x:100, y:200, wheelR:20, axle:50, torque:0.001, spring:{len:20, stiff:0.6, damp:0.25} };
 
-      <!-- Touch controls -->
-      <div class="touchpad" id="touchpad">
-        <div></div><button class="tpbtn" data-dir="up">↑</button><div></div>
-        <button class="tpbtn" data-dir="left">←</button><div></div><button class="tpbtn" data-dir="right">→</button>
-        <div></div><button class="tpbtn" data-dir="down">↓</button><div></div>
-      </div>
+    const engine = Engine.create({ gravity:{ x:0, y:1.2 } });
+    const render = Render.create({ element:document.getElementById('stage'), engine, options:{ width:900, height:400, wireframes:false, background:'#0b1025' }});
+    Render.run(render); Runner.run(Runner.create(), engine);
 
-      <!-- Start overlay -->
-      <div class="overlay" id="overlay">
-        <div class="panel">
-          <h2>Tap “Start” to drive</h2>
-          <p>Throttle with <span class="kbd">→</span>, brake <span class="kbd">←</span>, pitch your car with <span class="kbd">↑/↓</span>. Reach as far as you can.</p>
-          <div class="cta" style="margin-top:10px">
-            <button class="btn primary" id="startBtn">Start</button>
-            <button class="btn secondary" id="howBtn">How to play</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+    // Terrain generation
+    const noise2D = createNoise2D(), ground = [];
+    let maxX = -SEG_W*2;
+    function addTerrain(xTo) {
+      for(let x = maxX; x < xTo; x += SEG_W) {
+        const y0 = 350 - (noise2D(x*SCALE,0)*AMP);
+        const y1 = 350 - (noise2D((x+SEG_W)*SCALE,0)*AMP);
+        const tri = Bodies.fromVertices(x + SEG_W/2, 0, [
+          {x:x, y:y0}, {x:x+SEG_W, y:y1}, {x:x+SEG_W, y:400}, {x:x, y:400}
+        ], { isStatic:true, render:{ fillStyle:'#0e172d' }}, true);
+        World.add(engine.world, tri);
+        ground.push(tri);
+      }
+      maxX = xTo;
+    }
+    addTerrain(800);
 
-  <section id="how" class="card" style="margin-top:18px">
-    <h2>How to play</h2>
-    <ul>
-      <li>Accelerate with <strong>Right Arrow</strong>, brake/reverse with <strong>Left Arrow</strong>.</li>
-      <li>Use <strong>Up/Down</strong> to pitch the car mid-air for better landings.</li>
-      <li>Drive as far as possible without flipping. Your best distance is saved locally.</li>
-    </ul>
-  </section>
+    // Car creation
+    function makeCar(x, y) {
+      const group = Body.nextGroup(true);
+      const chassis = Bodies.rectangle(x, y, 100, 20, { collisionFilter:{ group }, render:{ fillStyle:'#22d3ee' }});
+      const wl = Bodies.circle(x - carSetting.axle, y + 20, carSetting.wheelR, { collisionFilter:{ group }, friction:0.9, render:{ fillStyle:'#94a3b8' }});
+      const wr = Bodies.circle(x + carSetting.axle, y + 20, carSetting.wheelR, { collisionFilter:{ group }, friction:0.9, render:{ fillStyle:'#94a3b8' }});
+      const sl = Constraint.create({ bodyA:chassis, pointA:{x:-carSetting.axle,y:10}, bodyB:wl, length:carSetting.spring.len, stiffness:carSetting.spring.stiff, damping:carSetting.spring.damp });
+      const sr = Constraint.create({ bodyA:chassis, pointA:{x:carSetting.axle,y:10}, bodyB:wr, length:carSetting.spring.len, stiffness:carSetting.spring.stiff, damping:carSetting.spring.damp });
+      World.add(engine.world, [chassis, wl, wr, sl, sr]);
+      return { chassis, wl, wr };
+    }
+    const car = makeCar(carSetting.x, carSetting.y);
 
-  <section id="tuning" class="card" style="margin-top:18px">
-    <h2>Tuning</h2>
-    <p>Open the code and tweak the <code>TUNE</code> object (spring stiffness/damping, torque, wheel size). Changes hot-reload on refresh.</p>
-  </section>
-</main>
+    // Camera follow & distance
+    const distSpan = document.getElementById('dist');
+    Events.on(engine, 'afterUpdate', () => {
+      addTerrain(car.chassis.position.x + 400);
+      distSpan.textContent = Math.floor((car.chassis.position.x - carSetting.x)) + ' m';
+      Render.lookAt(render, car.chassis, { x: render.options.width/2, y: render.options.height/2 });
+    });
 
-<footer>© <span id="year"></span> Climb+</footer>
+    // Controls
+    const keys = { left:false, right:false };
+    window.addEventListener('keydown', e => { if(e.code==='ArrowRight') keys.right=true; if(e.code==='ArrowLeft') keys.left=true; });
+    window.addEventListener('keyup', e => { if(e.code==='ArrowRight') keys.right=false; if(e.code==='ArrowLeft') keys.left=false; });
+    Events.on(engine, 'beforeUpdate', () => {
+      if(keys.right) Body.applyTorque(car.wl, carSetting.torque), Body.applyTorque(car.wr, carSetting.torque);
+      if(keys.left) Body.applyTorque(car.wl, -carSetting.torque), Body.applyTorque(car.wr, -carSetting.torque);
+    });
 
-<!-- Physics engine (global 'Matter') -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js" integrity="sha512-+F3oGvC5p3QweP5m8y17Q6vGAO2qE5u4l09w5qQ1zI9mUKX6nWPqZl1Y3HhQJf2lqC5xUydxHZo3YkcnFjMtxg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<!-- Noise (ES module import) -->
-<script type="module">
-import { createNoise2D } from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm';
+    // Start and overlay handling
+    const overlay = document.getElementById('overlay');
+    document.getElementById('startBtn').onclick = () => overlay.classList.add('hidden');
 
-const {
-  Engine, Render, Runner, World, Bodies, Body, Composite, Constraint, Common, Events, Vertices
-} = window.Matter;
-
-// ---------------------- Config / Tuning ----------------------
-const TUNE = {
-  world: { g: 1.1 },               // gravity
-  segmentW: 60,                     // width of each terrain segment (px)
-  noiseScale: 0.0025,               // lower = smoother hills
-  noiseAmp: 140,                    // hill amplitude (px)
-  car: {
-    x: 100, y: 200,
-    wheelR: 26, axleOffset: 55,     // distance between wheels
-    torque: 0.0016,                 // motor torque (apply to wheels)
-    pitchTorque: 0.0009,            // torque applied to chassis with ↑/↓
-    chassis: { w: 120, h: 30, density: 0.0018, friction: 0.3, restitution: 0.0 },
-    wheel:   { density: 0.0025, friction: 0.9, restitution: 0.1 },
-    spring:  { length: 18, stiffness: 0.56, damping: 0.24 } // refined, spring-y but stable
-  }
-};
-
-// ---------------------- Engine / Render ----------------------
-const engine = Engine.create({ gravity: { x: 0, y: TUNE.world.g }});
-const stage = document.getElementById('stage');
-const render = Render.create({
-  element: stage,
-  engine,
-  options: {
-    width: 1024, height: 576,
-    background: 'linear-gradient(180deg, #0b1025, #0a0e21)',
-    wireframes: false, pixelRatio: window.devicePixelRatio || 1,
-    showPerformance: false
-  }
-});
-Render.run(render);
-const runner = Runner.create();
-Runner.run(runner, engine);
-document.getElementById('year').textContent = new Date().getFullYear();
-
-// ---------------------- Terrain (endless) ----------------------
-const noise2D = createNoise2D(); // seeded internally; change to createNoise2D(RandomSeed) if needed
-const groundBodies = [];
-let terrainXMax = -Infinity;
-
-const WORLD_FLOOR = render.options.height - 40; // base line
-function terrainY(x){
-  return WORLD_FLOOR - (noise2D(x * TUNE.noiseScale, 0) * TUNE.noiseAmp + 60);
-}
-
-function addTerrainUntil(targetX){
-  const step = TUNE.segmentW;
-  let startX = (groundBodies.length ? terrainXMax : -step*2);
-  if (startX < -step) startX = -step;
-  for (let x = startX; x < targetX + 800; x += step){
-    const x0 = x, x1 = x + step;
-    const y0 = terrainY(x0), y1 = terrainY(x1);
-    // Build a polygon that fills downwards (prevents falling through gaps)
-    const poly = [
-      {x:x0, y:y0}, {x:x1, y:y1}, {x:x1, y:10000}, {x:x0, y:10000}
-    ];
-    const ground = Bodies.fromVertices(x0 + step/2, 0, [poly], {
-      isStatic: true,
-      friction: 0.9,
-      render: { fillStyle: '#0e172d', strokeStyle: 'rgba(167,139,250,.35)', lineWidth: 1 }
-    }, true);
-    World.add(engine.world, ground);
-    groundBodies.push(ground);
-    terrainXMax = x1;
-  }
-}
-
-// ---------------------- Car (chassis + 2 wheels + springs) ----------------------
-function makeCar(x, y){
-  // Put all parts in the same negative group -> they won't collide with each other
-  const group = Body.nextGroup(true); // negative group, see Matter docs
-  const ch = Bodies.rectangle(x, y, TUNE.car.chassis.w, TUNE.car.chassis.h, {
-    density: TUNE.car.chassis.density,
-    friction: TUNE.car.chassis.friction,
-    restitution: TUNE.car.chassis.restitution,
-    chamfer: { radius: 10 },
-    collisionFilter: { group },
-    render: { fillStyle: '#22d3ee' }
-  });
-  const wR = TUNE.car.wheelR;
-  const axle = TUNE.car.axleOffset;
-
-  const wl = Bodies.circle(x - axle, y + 10, wR, {
-    density: TUNE.car.wheel.density,
-    friction: TUNE.car.wheel.friction,
-    restitution: TUNE.car.wheel.restitution,
-    collisionFilter: { group },
-    render: { fillStyle: '#94a3b8' }
-  });
-  const wr = Bodies.circle(x + axle, y + 10, wR, {
-    density: TUNE.car.wheel.density,
-    friction: TUNE.car.wheel.friction,
-    restitution: TUNE.car.wheel.restitution,
-    collisionFilter: { group },
-    render: { fillStyle: '#94a3b8' }
-  });
-
-  // Suspension via constraints (springs with damping)
-  const sL = Constraint.create({
-    bodyA: ch, pointA: { x: -axle, y: 12 },
-    bodyB: wl, pointB: { x: 0, y: 0 },
-    length: TUNE.car.spring.length, stiffness: TUNE.car.spring.stiffness, damping: TUNE.car.spring.damping,
-    render: { strokeStyle: 'rgba(255,255,255,.3)' }
-  });
-  const sR = Constraint.create({
-    bodyA: ch, pointA: { x: axle, y: 12 },
-    bodyB: wr, pointB: { x: 0, y: 0 },
-    length: TUNE.car.spring.length, stiffness: TUNE.car.spring.stiffness, damping: TUNE.car.spring.damping,
-    render: { strokeStyle: 'rgba(255,255,255,.3)' }
-  });
-
-  World.add(engine.world, [ch, wl, wr, sL, sR]);
-  return { ch, wl, wr };
-}
-
-const car = makeCar(TUNE.car.x, TUNE.car.y);
-
-// ---------------------- Controls ----------------------
-const keys = { left:false, right:false, up:false, down:false };
-function setKey(code, down){
-  if (code==='ArrowLeft' || code==='KeyA') keys.left = down;
-  if (code==='ArrowRight'|| code==='KeyD') keys.right = down;
-  if (code==='ArrowUp'   || code==='KeyW') keys.up = down;
-  if (code==='ArrowDown' || code==='KeyS') keys.down = down;
-  if (code==='KeyP' && down){ togglePause(); }
-}
-addEventListener('keydown', e=>{ if (e.code.startsWith('Arrow')) e.preventDefault(); setKey(e.code,true); });
-addEventListener('keyup',   e=> setKey(e.code,false) );
-
-document.querySelectorAll('.tpbtn').forEach(btn=>{
-  const map = {up:'ArrowUp',down:'ArrowDown',left:'ArrowLeft',right:'ArrowRight'};
-  const code = map[btn.dataset.dir];
-  btn.addEventListener('mousedown', ()=>setKey(code,true));
-  btn.addEventListener('mouseup',   ()=>setKey(code,false));
-  btn.addEventListener('mouseleave',()=>setKey(code,false));
-  btn.addEventListener('touchstart',(e)=>{e.preventDefault(); setKey(code,true);});
-  btn.addEventListener('touchend',  (e)=>{e.preventDefault(); setKey(code,false);});
-});
-
-// ---------------------- Camera follow ----------------------
-const cam = { x: 0, y: 0 };
-function updateCamera(){
-  const targetX = car.ch.position.x + 220;
-  const targetY = car.ch.position.y - 60;
-  cam.x += (targetX - cam.x) * 0.08;
-  cam.y += (targetY - cam.y) * 0.08;
-
-  const halfW = render.options.width/2;
-  const halfH = render.options.height/2;
-  render.bounds.min.x = cam.x - halfW;
-  render.bounds.max.x = cam.x + halfW;
-  render.bounds.min.y = cam.y - halfH;
-  render.bounds.max.y = cam.y + halfH;
-  Render.lookAt(render, render.bounds);
-}
-
-// ---------------------- Game loop: inputs/forces/HUD ----------------------
-const distEl = document.getElementById('dist');
-const bestEl = document.getElementById('best');
-const fpsEl = document.getElementById('fps');
-const pauseBtn = document.getElementById('pauseBtn');
-const resetBtn = document.getElementById('resetBtn');
-const overlay = document.getElementById('overlay');
-const startBtn = document.getElementById('startBtn');
-const howBtn = document.getElementById('howBtn');
-document.getElementById('year').textContent = new Date().getFullYear();
-
-let running = false, paused = false, lastT = 0, fpsSmoothed = 0;
-let best = +localStorage.getItem('climb_best') || 0;
-
-function togglePause(){
-  paused = !paused;
-  pauseBtn.textContent = paused ? '▶' : '⏸';
-}
-pauseBtn.addEventListener('click', togglePause);
-resetBtn.addEventListener('click', ()=>{ best=0; localStorage.setItem('climb_best', '0'); bestEl.textContent = '0 m'; });
-
-startBtn.addEventListener('click', ()=>{ overlay.style.display='none'; running = true; });
-howBtn.addEventListener('click', ()=> location.hash = '#how');
-
-Events.on(engine, 'beforeUpdate', () => {
-  if (!running || paused) return;
-
-  // Ensure terrain exists ahead
-  addTerrainUntil(car.ch.position.x + 600);
-
-  // Wheel torque control
-  const torque = TUNE.car.torque;
-  if (keys.right) { Body.setAngularVelocity(car.wl, car.wl.angularVelocity + torque); Body.setAngularVelocity(car.wr, car.wr.angularVelocity + torque); }
-  if (keys.left)  { Body.setAngularVelocity(car.wl, car.wl.angularVelocity - torque); Body.setAngularVelocity(car.wr, car.wr.angularVelocity - torque); }
-
-  // Pitch control (rotate chassis slightly in air)
-  if (keys.up)   Body.setAngularVelocity(car.ch, car.ch.angularVelocity - TUNE.car.pitchTorque);
-  if (keys.down) Body.setAngularVelocity(car.ch, car.ch.angularVelocity + TUNE.car.pitchTorque);
-});
-
-// Simple “death” if upside-down for a while
-let upsideTimer = 0;
-Events.on(engine, 'afterUpdate', (e) => {
-  if (!running || paused) return;
-
-  const angle = Math.abs(car.ch.angle % (Math.PI*2));
-  const upside = (angle > Math.PI/2 && angle < Math.PI*1.5);
-  upsideTimer = upside ? upsideTimer + e.delta : Math.max(0, upsideTimer - e.delta*2);
-  if (upsideTimer > 1400){ // ~1.4s upside-down
-    running = false;
-    overlay.querySelector('h2').textContent = 'You flipped!';
-    overlay.querySelector('p').innerHTML = `Distance: <strong>${meters(distanceTravelled())}</strong> • Best: <strong>${meters(best)}</strong>`;
-    overlay.style.display = 'flex';
-  }
-
-  updateCamera();
-
-  // HUD: distance & FPS
-  const d = distanceTravelled();
-  if (d > best){ best = d; localStorage.setItem('climb_best', String(best)); }
-  distEl.textContent = meters(d);
-  bestEl.textContent = meters(best);
-
-  const dt = (e.timestamp - lastT) || 16.7; lastT = e.timestamp;
-  const fps = 1000/dt; fpsSmoothed = fpsSmoothed? fpsSmoothed*0.9 + fps*0.1 : fps;
-  fpsEl.textContent = Math.round(fpsSmoothed);
-});
-
-function meters(px){ return Math.floor(px/30) + ' m'; }
-function distanceTravelled(){ return Math.max(0, car.ch.position.x - TUNE.car.x); }
-
-// Spawn initial ground
-addTerrainUntil(1200);
-
-// Niceties: world boundaries far below
-const floor = Bodies.rectangle(0, 10040, 40000, 100, { isStatic:true, render:{visible:false}});
-World.add(engine.world, floor);
-
-// Start visible if user presses any driving key
-addEventListener('keydown', () => { if (!running){ overlay.style.display='none'; running=true; }}, { once:false });
-</script>
-
+  </script>
 </body>
 </html>
+
