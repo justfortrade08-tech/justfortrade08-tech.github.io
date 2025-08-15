@@ -23,6 +23,15 @@
   });
   Render.run(render);
   Runner.run(Runner.create(), engine);
+// Function to follow the car smoothly
+function updateCamera() {
+  const margin = 200; // how much ahead of the car to show
+  const left = car.position.x - margin;
+  Render.lookAt(render, {
+    min: { x: left, y: 0 },
+    max: { x: left + render.options.width, y: render.options.height }
+  });
+}
 
   // Terrain: Use stack of rectangles
   const cols = 50, w = 1600, ch = 20;
@@ -41,12 +50,27 @@
     if (key.right) Body.applyForce(car.bodies[1], car.bodies[1].position, { x: speed, y: 0 });
     if (key.left) Body.applyForce(car.bodies[2], car.bodies[2].position, { x: -speed, y: 0 });
   });
+updateCamera();
 
   const key = { left: false, right: false };
   window.addEventListener('keydown', e => { if (e.code === 'ArrowRight') key.right = true; if (e.code === 'ArrowLeft') key.left = true; });
   window.addEventListener('keyup', e => { if (e.code === 'ArrowRight') key.right = false; if (e.code === 'ArrowLeft') key.left = false; });
 
   console.log("Use left/right arrows to drive");
+Events.on(engine, 'afterUpdate', () => {
+  addTerrain(car.position.x + 800);
+  const dist = Math.max(0, Math.floor(car.position.x - CAR_START_X));
+  hud.textContent = `Distance: ${dist} m`;
+
+  // ** Add this to make the camera follow the car **
+  const margin = 200;
+  const left = car.position.x - margin;
+  Render.lookAt(render, {
+    min: { x: left, y: 0 },
+    max: { x: left + W, y: H }
+  });
+});
+
 </script>
 </body>
 </html>
