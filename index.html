@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Climb+ — Fixed & Refined</title>
+  <title>Climb+ Final Fixed Version</title>
   <style>
     body,html{margin:0;padding:0;height:100%;background:#0a0f1f;color:#eee;font-family:sans-serif}
     #stage{position:relative;width:100%;max-width:900px;height:400px;margin:20px auto;background:#111;overflow:hidden}
@@ -14,110 +14,108 @@
   </style>
 </head>
 <body>
-<div id="stage">
-  <div id="overlay"><button id="startBtn">Start Driving</button></div>
-  <div id="hud">Distance: 0 m</div>
-</div>
+  <div id="stage">
+    <div id="overlay"><button id="startBtn">Start Driving</button></div>
+    <div id="hud">Distance: 0 m</div>
+  </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
-<script type="module">
-import { createNoise2D } from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm';
-const { Engine, Render, Runner, World, Bodies, Body, Constraint, Events } = Matter;
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+  <script type="module">
+    import { createNoise2D } from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm';
+    const { Engine, Render, Runner, World, Bodies, Body, Constraint, Events } = Matter;
 
-// 1. Engine & Render setup
-const engine = Engine.create({ gravity: { x: 0, y: 1.2 } });
-const render = Render.create({
-  element: document.getElementById('stage'),
-  engine,
-  options: { width: 900, height: 400, wireframes: false, background: '#111' }
-});
-Render.run(render);
-Runner.run(Runner.create(), engine);
+    const engine = Engine.create({ gravity: { x: 0, y: 1.2 } });
+    const render = Render.create({
+      element: document.getElementById('stage'),
+      engine,
+      options: { width: 900, height: 400, wireframes: false, background: '#111' }
+    });
+    Render.run(render);
+    Runner.run(Runner.create(), engine);
 
-// Collision categories
-const CAT_WORLD = 0x0001, CAT_CAR = 0x0002, CAT_WHEEL = 0x0004;
+    const CAT_WORLD = 0x0001, CAT_CAR = 0x0002, CAT_WHEEL = 0x0004;
+    const noise2D = createNoise2D();
+    let maxX = -300, SEG_W = 60, AMP = 100, SCALE = 0.003;
 
-// 2. Terrain
-const noise2D = createNoise2D();
-let maxX = -300, SEG_W = 60, AMP = 100, SCALE = 0.003;
-function addTerrain(toX){
-  for(let x=maxX; x<toX; x+=SEG_W){
-    const y0 = 300 - noise2D(x*SCALE,0)*AMP;
-    const y1 = 300 - noise2D((x+SEG_W)*SCALE,0)*AMP;
-    const verts = [{x, y:y0},{x:x+SEG_W, y:y1},{x:x+SEG_W,y:400},{x,y:400}];
-    const seg = Bodies.fromVertices(x+SEG_W/2,200,verts,{
-      isStatic:true,
-      collisionFilter:{ category: CAT_WORLD, mask: CAT_CAR | CAT_WHEEL },
-      render:{ fillStyle:'#444', strokeStyle:'#888', lineWidth:1 }
-    }, true);
-    World.add(engine.world, seg);
-  }
-  maxX = toX;
-}
-addTerrain(900);
+    function addTerrain(toX){
+      for(let x = maxX; x < toX; x += SEG_W){
+        const y0 = 300 - noise2D(x * SCALE, 0) * AMP;
+        const y1 = 300 - noise2D((x + SEG_W) * SCALE, 0) * AMP;
+        const verts = [{x, y: y0}, {x: x + SEG_W, y: y1}, {x: x + SEG_W, y: 400}, {x, y: 400}];
+        const seg = Bodies.fromVertices(x + SEG_W / 2, 200, verts, {
+          isStatic: true,
+          collisionFilter: { category: CAT_WORLD, mask: CAT_CAR | CAT_WHEEL },
+          render: { fillStyle: '#444', strokeStyle: '#888', lineWidth:1 }
+        }, true);
+        World.add(engine.world, seg);
+      }
+      maxX = toX;
+    }
+    addTerrain(900);
 
-// 3. Car with stiff pin constraints & filtering
-const carCfg = { x:100, y:200, axle:50, torque:0.002, wheelR:20 };
-function createCar(x,y){
-  const group = Body.nextGroup(true);
-  const chassis = Bodies.rectangle(x,y,100,20,{
-    collisionFilter:{ category: CAT_CAR, mask: CAT_WORLD },
-    render:{ fillStyle:'#0af' }
-  });
-  const leftW = Bodies.circle(x-carCfg.axle, y+22, carCfg.wheelR,{
-    collisionFilter:{ category: CAT_WHEEL, mask: CAT_WORLD },
-    friction:0.9, render:{ fillStyle:'#faa' }
-  });
-  const rightW = Bodies.circle(x+carCfg.axle, y+22, carCfg.wheelR,{
-    collisionFilter:{ category: CAT_WHEEL, mask: CAT_WORLD },
-    friction:0.9, render:{ fillStyle:'#faa' }
-  });
-  const pinL = Constraint.create({
-    bodyA: chassis, pointA:{x:-carCfg.axle,y:10},
-    bodyB: leftW, pointB:{x:0,y:0},
-    length: 0, stiffness: 0.9
-  });
-  const pinR = Constraint.create({
-    bodyA: chassis, pointA:{x:carCfg.axle,y:10},
-    bodyB: rightW, pointB:{x:0,y:0},
-    length: 0, stiffness: 0.9
-  });
-  World.add(engine.world,[chassis, leftW, rightW, pinL, pinR]);
-  return { chassis, leftW, rightW };
-}
-const car = createCar(carCfg.x, carCfg.y);
+    const carCfg = { x:100, y:200, axle:50, torque:0.002, wheelR:20 };
 
-// 4. Controls
-const keys = { left:false, right:false };
-window.addEventListener('keydown',e=>{
-  if(e.code==='ArrowRight') keys.right=true;
-  if(e.code==='ArrowLeft') keys.left=true;
-  startGame();
-});
-window.addEventListener('keyup',e=>{ if(e.code==='ArrowRight') keys.right=false; if(e.code==='ArrowLeft') keys.left=false; });
+    function createCar(x, y){
+      const group = Body.nextGroup(true);
+      const chassis = Bodies.rectangle(x, y, 100, 20, {
+        collisionFilter: { category: CAT_CAR, mask: CAT_WORLD },
+        render: { fillStyle: '#0af' }
+      });
+      const leftW = Bodies.circle(x - carCfg.axle, y + 22, carCfg.wheelR, {
+        collisionFilter: { category: CAT_WHEEL, mask: CAT_WORLD },
+        friction: 0.9, render: { fillStyle: '#faa' }
+      });
+      const rightW = Bodies.circle(x + carCfg.axle, y + 22, carCfg.wheelR, {
+        collisionFilter: { category: CAT_WHEEL, mask: CAT_WORLD },
+        friction: 0.9, render: { fillStyle: '#faa' }
+      });
+      const pinL = Constraint.create({
+        bodyA: chassis, pointA:{ x: -carCfg.axle, y: 10 },
+        bodyB: leftW, pointB:{ x: 0, y: 0 },
+        length: 0, stiffness: 0.9
+      });
+      const pinR = Constraint.create({
+        bodyA: chassis, pointA:{ x: carCfg.axle, y: 10 },
+        bodyB: rightW, pointB:{ x: 0, y: 0 },
+        length: 0, stiffness: 0.9
+      });
+      World.add(engine.world, [chassis, leftW, rightW, pinL, pinR]);
+      return { chassis, leftW, rightW };
+    }
+    const car = createCar(carCfg.x, carCfg.y);
 
-Events.on(engine,'beforeUpdate',()=>{
-  if(keys.right){ Body.applyTorque(car.leftW, carCfg.torque); Body.applyTorque(car.rightW, carCfg.torque); }
-  if(keys.left){ Body.applyTorque(car.leftW, -carCfg.torque); Body.applyTorque(car.rightW, -carCfg.torque); }
-});
+    const keys = { left: false, right: false };
+    window.addEventListener('keydown', e => {
+      if (e.code === 'ArrowRight') keys.right = true;
+      if (e.code === 'ArrowLeft') keys.left = true;
+      startGame();
+    });
+    window.addEventListener('keyup', e => {
+      if (e.code === 'ArrowRight') keys.right = false;
+      if (e.code === 'ArrowLeft') keys.left = false;
+    });
 
-// 5. HUD & camera follow
-const hud = document.getElementById('hud');
-Events.on(engine,'afterUpdate',()=>{
-  addTerrain(car.chassis.position.x + 600);
-  const dist = Math.max(0, Math.floor(car.chassis.position.x - carCfg.x));
-  hud.textContent = `Distance: ${dist} m`;
-  Render.lookAt(render,{
-    min:{x:car.chassis.position.x-200,y:0},
-    max:{x:car.chassis.position.x+200,y:400}
-  });
-});
+    Events.on(engine, 'beforeUpdate', () => {
+      if (keys.right) { Body.applyTorque(car.leftW, carCfg.torque); Body.applyTorque(car.rightW, carCfg.torque); }
+      if (keys.left)  { Body.applyTorque(car.leftW, -carCfg.torque); Body.applyTorque(car.rightW, -carCfg.torque); }
+    });
 
-// 6. Overlay start
-document.getElementById('startBtn').onclick = ()=> document.getElementById('overlay').classList.add('hidden');
+    const hud = document.getElementById('hud');
+    Events.on(engine, 'afterUpdate', () => {
+      addTerrain(car.chassis.position.x + 600);
+      const dist = Math.max(0, Math.floor(car.chassis.position.x - carCfg.x));
+      hud.textContent = `Distance: ${dist} m`;
+      Render.lookAt(render, {
+        min: { x: car.chassis.position.x - 200, y: 0 },
+        max: { x: car.chassis.position.x + 200, y: 400 }
+      });
+    });
 
-console.log('Initialization complete.');
+    document.getElementById('startBtn').onclick = () => {
+      document.getElementById('overlay').classList.add('hidden');
+    };
 
-</script>
+    console.log('Initialization complete.');
+  </script>
 </body>
 </html>
