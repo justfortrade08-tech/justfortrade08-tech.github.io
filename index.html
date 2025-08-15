@@ -1,78 +1,154 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Sturdy Climb+ (No Wheel Collapse!)</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Climb+ — Stable Fixed Version</title>
   <style>
-    body,html{margin:0;padding:0;height:100%;background:#222;color:#eee;font-family:sans-serif;}
-    #stage{position:relative;width:100%;max-width:900px;height:400px;margin:20px auto;background:#111;overflow:hidden;}
-    #overlay{position:absolute;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10;}
+    html,body{height:100%; margin:0; background:#0b0f18; color:#eee; font-family:system-ui, Arial;}
+    .wrap{max-width:1000px; margin:12px auto; padding:8px;}
+    #stage{width:100%; max-width:900px; height:420px; margin:14px auto; background:linear-gradient(#0b1025,#0a0e21); position:relative; overflow:hidden; border-radius:10px; border:1px solid rgba(255,255,255,0.04);}
+    #overlay{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:40; background:linear-gradient(rgba(2,6,23,0.6), rgba(2,6,23,0.4));}
     #overlay.hidden{display:none}
-    #startBtn{padding:12px 24px;font-size:18px;cursor:pointer;}
-    #hud{position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.5);padding:6px;border-radius:4px;z-index:20;}
+    #startBtn{padding:10px 16px; font-weight:700; border-radius:8px; cursor:pointer; border:none; background:linear-gradient(90deg,#22d3ee,#a78bfa); color:#041026;}
+    #hud{position:absolute; right:12px; bottom:10px; z-index:50; background:rgba(2,6,23,0.6); padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05)}
   </style>
 </head>
 <body>
-  <div id="stage">
-    <div id="overlay"><button id="startBtn">Start Driving</button></div>
-    <div id="hud">Distance: 0 m</div>
+  <div class="wrap">
+    <h2 style="margin:6px 0 12px">Climb+ — Stable build</h2>
+    <div id="stage">
+      <div id="overlay"><button id="startBtn">Start</button></div>
+      <div id="hud">Distance: 0 m</div>
+    </div>
+    <p style="color:#9aa">Controls: Right Arrow = accelerate, Left Arrow = brake/reverse</p>
   </div>
+
+  <!-- Matter.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+
+  <!-- Simplex noise (ESM import) -->
   <script type="module">
-import { createNoise2D } from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm';
-const { Engine, Render, Runner, World, Bodies, Events, Body } = Matter;
+  import { createNoise2D } from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm';
 
-// --- Setup basics ---
-const engine = Engine.create({ gravity: { x:0, y:1.2 } });
-const render = Render.create({ element: document.getElementById('stage'), engine, options:{ width:900, height:400, wireframes:false, background:'#111' } });
-Render.run(render);
-Runner.run(Runner.create(), engine);
+  const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
 
-// --- Terrain generation ---
-const noise2D = createNoise2D();
-let maxX = -300, SEG_W=60, AMP=100, SCALE=0.003;
-function addTerrain(toX){
-  for(let x=maxX; x<toX; x+=SEG_W){
-    const y0 = 300 - noise2D(x * SCALE,0)*AMP;
-    const y1 = 300 - noise2D((x + SEG_W)*SCALE,0)*AMP;
-    const seg = Bodies.rectangle(x + SEG_W/2, (y0+y1)/2 + 50, SEG_W, 400 - (y0+y1)/2, {
-      isStatic:true,
-      render:{ fillStyle:'#444' }
-    });
-    World.add(engine.world, seg);
+  // --- Setup engine + renderer ---
+  const engine = Engine.create();
+  // increase iterations for stability (helps constraints & collision resolution)
+  engine.positionIterations = 10;
+  engine.constraintIterations = 10;
+  engine.velocityIterations = 6;
+
+  const STAGE = document.getElementById('stage');
+  const W = 900, H = 420;
+  const render = Render.create({
+    element: STAGE,
+    engine: engine,
+    options: { width: W, height: H, wireframes: false, background: 'transparent' }
+  });
+  Render.run(render);
+  const runner = Runner.create();
+  Runner.run(runner, engine);
+
+  // --- Terrain generation as overlapping tall columns (no gaps) ---
+  const noise2D = createNoise2D();
+  const SEG_W = 60;                    // horizontal resolution
+  const AMP = 90;                      // amplitude
+  const SCALE = 0.0028;                // smoothness
+  const PAD = 20;                      // extra padding to avoid seams
+  let terrainMaxX = -SEG_W * 2;
+
+  // helper: sample noise -> top y coordinate (smaller y = higher on screen)
+  function sampleTop(x) {
+    const n = noise2D(x * SCALE, 0);
+    // center baseline near bottom portion of screen
+    const baseline = H - 80;
+    return baseline - (n * AMP);
   }
-  maxX = toX;
-}
-addTerrain(900);
 
-// --- Car with manual control (no torque) ---
-const car = Bodies.rectangle(100, 200, 80, 20, { friction: 0.6, restitution: 0.2 });
-World.add(engine.world, car);
+  function addTerrain(toX) {
+    // create overlapping vertical rectangles spanning from each top down to bottom.
+    for (let x = terrainMaxX; x < toX; x += SEG_W) {
+      const yA = sampleTop(x);
+      const yB = sampleTop(x + SEG_W);
+      // take the *higher* top (smaller Y) so tall rectangle covers both neighbors (avoids seams)
+      const topY = Math.min(yA, yB) - PAD;
+      const height = (H - topY) + PAD;
+      const centerY = topY + height / 2;
+      const rect = Bodies.rectangle(x + SEG_W / 2, centerY, SEG_W + 4, height, {
+        isStatic: true,
+        friction: 1,
+        render: { fillStyle: '#2f333a' }
+      });
+      World.add(engine.world, rect);
+    }
+    terrainMaxX = toX;
+    // debug console
+    // console.log('terrain extended to', toX);
+  }
 
-const keys = { left:false, right:false };
-window.addEventListener('keydown',e=>{
-  if(e.code==='ArrowRight') keys.right = true;
-  if(e.code==='ArrowLeft') keys.left = true;
-  document.getElementById('overlay').classList.add('hidden');
-});
-window.addEventListener('keyup',e=>{
-  if(e.code==='ArrowRight') keys.right = false;
-  if(e.code==='ArrowLeft') keys.left = false;
-});
+  // seed initial terrain wide enough for start
+  addTerrain(1400);
 
-// --- Movement logic ---
-Events.on(engine, 'beforeUpdate', ()=>{
-  if(keys.right) Body.applyForce(car, car.position, { x: 0.0005, y: 0 });
-  if(keys.left) Body.applyForce(car, car.position, { x: -0.0005, y: 0 });
-});
+  // add a very-deep fallback floor far below as extra safety
+  World.add(engine.world, Bodies.rectangle(W/2, H + 1200, 10000, 2400, { isStatic: true, render: { visible: false } }));
 
-// --- Camera & HUD updates ---
-const hud = document.getElementById('hud');
-Events.on(engine, 'afterUpdate', ()=>{
-  addTerrain(car.position.x + 600);
-  hud.textContent = `Distance: ${Math.floor(car.position.x - 100)} m`;
-  Render.lookAt(render, car, { x: 200, y: 200 });
-});
+  // --- Car (single rectangle, stable) ---
+  const CAR_START_X = 140;
+  // choose start top so car won't be buried
+  const startTop = sampleTop(CAR_START_X);
+  const carY = startTop - 36; // slightly above ground
+  const car = Bodies.rectangle(CAR_START_X, carY, 110, 24, {
+    friction: 0.8,
+    restitution: 0.05,
+    density: 0.002,
+    render: { fillStyle: '#ffd86b' }
+  });
+  World.add(engine.world, car);
+
+  // --- Controls: apply continuous force in beforeUpdate ---
+  const keys = { left:false, right:false };
+  window.addEventListener('keydown', e => {
+    if (e.code === 'ArrowRight') keys.right = true;
+    if (e.code === 'ArrowLeft') keys.left = true;
+    // hide overlay if present
+    document.getElementById('overlay').classList.add('hidden');
+  });
+  window.addEventListener('keyup', e => {
+    if (e.code === 'ArrowRight') keys.right = false;
+    if (e.code === 'ArrowLeft') keys.left = false;
+  });
+
+  // small constant force magnitude tuned for this mass/density
+  const FORWARD_FORCE = 0.0006;
+  Events.on(engine, 'beforeUpdate', () => {
+    if (keys.right) Body.applyForce(car, car.position, { x: FORWARD_FORCE, y: 0 });
+    if (keys.left) Body.applyForce(car, car.position, { x: -FORWARD_FORCE/1.2, y: 0 });
+  });
+
+  // --- Camera & HUD ---
+  const hud = document.getElementById('hud');
+  Events.on(engine, 'afterUpdate', () => {
+    // extend terrain ahead of vehicle
+    addTerrain(Math.floor(car.position.x + 800));
+    // update HUD
+    const distance = Math.max(0, Math.floor((car.position.x - CAR_START_X)));
+    hud.textContent = `Distance: ${distance} m`;
+    // smooth camera: set bounds to roughly center on car
+    const viewHalfW = W/2 - 120;
+    const min = { x: car.position.x - viewHalfW, y: 0 };
+    const max = { x: car.position.x + viewHalfW, y: H };
+    Render.lookAt(render, { min, max });
+  });
+
+  // Start button
+  document.getElementById('startBtn').addEventListener('click', () => {
+    document.getElementById('overlay').classList.add('hidden');
+  });
+
+  console.log('Stable Climb+ loaded — try Right Arrow to drive.');
+
   </script>
 </body>
 </html>
