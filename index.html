@@ -1,15 +1,15 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Climb+ Debug Version</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Climb+ — Refined Hill Climb Game (Fixed)</title>
   <style>
-    body, html { margin:0; padding:0; height:100%; background:#0a0f1f; color:#eee; font:16px sans-serif;}
+    body, html { margin:0; padding:0; height:100%; background:#0a0f1f; color:#eee; font:16px sans-serif; }
     #stage { position:relative; width:100%; height:400px; max-width:900px; margin:20px auto; background:#0b1025; overflow:hidden; }
     #overlay { position:absolute; inset:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; color:#fff; z-index:10; }
     #overlay.hidden { display:none; }
-    #startBtn { padding:10px 20px; font-size:18px;}
+    #startBtn { padding:10px 20px; font-size:18px; }
     #hud { position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.5); padding:6px; border-radius:4px; z-index:20; }
   </style>
 </head>
@@ -27,56 +27,61 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
   <script type="module">
     import { createNoise2D } from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm';
-    const { Engine, Render, Runner, World, Bodies, Body, Constraint, Events } = Matter;
-    
-    console.log("Initializing game...");
+    const { Engine, Render, Runner, World, Bodies, Constraint, Events, Body } = Matter;
 
-    // Setup
+    console.log("Initializing Matter.js engine...");
+
+    // Setup physics engine & renderer
     const engine = Engine.create({ gravity: { x: 0, y: 1.2 } });
     const render = Render.create({
       element: document.getElementById('stage'),
-      engine,
+      engine: engine,
       options: { width: 900, height: 400, wireframes: false, background: '#0b1025' }
     });
     Render.run(render);
     Runner.run(Runner.create(), engine);
-    console.log("Engine and renderer running.");
+    console.log("Engine running, renderer setup.");
 
-    // Terrain generation
+    // Terrain generation using noise + Matter.Bodies.fromVertices
     const noise2D = createNoise2D();
     const SEG_W = 60, AMP = 100, SCALE = 0.003;
-    let maxX = -SEG_W * 2;
+    let terrainMaxX = -SEG_W * 2;
 
-    function addTerrain(targetX) {
-      for (let x = maxX; x < targetX; x += SEG_W) {
-        const y0 = 350 - (noise2D(x * SCALE, 0) * AMP);
-        const y1 = 350 - (noise2D((x + SEG_W) * SCALE, 0) * AMP);
-        const poly = Bodies.fromVertices(x + SEG_W/2, 0, [
-          { x: x, y: y0 }, { x: x + SEG_W, y: y1 },
-          { x: x + SEG_W, y: 400 }, { x: x, y: 400 }
-        ], { isStatic: true, render: { fillStyle: '#0e172d' } }, true);
-        World.add(engine.world, poly);
+    function addTerrain(upToX) {
+      for (let x = terrainMaxX; x < upToX; x += SEG_W) {
+        const y0 = 350 - noise2D(x * SCALE, 0) * AMP;
+        const y1 = 350 - noise2D((x + SEG_W) * SCALE, 0) * AMP;
+        const verts = [
+          { x: x, y: y0 },
+          { x: x + SEG_W, y: y1 },
+          { x: x + SEG_W, y: 400 },
+          { x: x, y: 400 },
+        ];
+        const terrainSegment = Bodies.fromVertices(x + SEG_W / 2, 200, verts, {
+          isStatic: true,
+          render: { fillStyle: '#0e172d', strokeStyle: '#567', lineWidth: 1 }
+        }, true);
+        World.add(engine.world, terrainSegment);
       }
-      maxX = targetX;
-      console.log("Added terrain up to", targetX);
+      terrainMaxX = upToX;
+      console.log("Terrain added up to:", upToX);
     }
 
-    // Car
-    const carCfg = { x: 100, y: 200, axle: 50, torque: 0.001, wheelR: 20, spring: { len: 20, stiff: 0.6, damp: 0.25 } };
-    function makeCar(x, y) {
+    // Create the car (chassis + wheels with suspension constraints)
+    const carCfg = { xStart: 100, yStart: 200, axle: 50, torque: 0.002, wheelR: 20, spring: { len: 20, stiff: 0.6, damp: 0.25 } };
+    function createCar(x, y) {
       const group = Body.nextGroup(true);
-      const chassis = Bodies.rectangle(x, y, 100, 20, { collisionFilter: { group }, render: { fillStyle: '#22d3ee' }});
-      const wl = Bodies.circle(x - carCfg.axle, y + 20, carCfg.wheelR, { collisionFilter: { group }, friction: 0.9, render: { fillStyle: '#94a3b8' }});
-      const wr = Bodies.circle(x + carCfg.axle, y + 20, carCfg.wheelR, { collisionFilter: { group }, friction: 0.9, render: { fillStyle: '#94a3b8' }});
-      const sl = Constraint.create({ bodyA: chassis, pointA: { x: -carCfg.axle, y: 10 }, bodyB: wl, length: carCfg.spring.len, stiffness: carCfg.spring.stiff, damping: carCfg.spring.damp });
-      const sr = Constraint.create({ bodyA: chassis, pointA: { x: carCfg.axle, y: 10 }, bodyB: wr, length: carCfg.spring.len, stiffness: carCfg.spring.stiff, damping: carCfg.spring.damp });
-      World.add(engine.world, [chassis, wl, wr, sl, sr]);
-      console.log("Car created at", x, y);
-      return { chassis, wl, wr };
+      const chassis = Bodies.rectangle(x, y, 100, 20, { collisionFilter: { group }, render: { fillStyle: '#22d3ee' } });
+      const leftWheel = Bodies.circle(x - carCfg.axle, y + 20, carCfg.wheelR, { collisionFilter: { group }, friction: 0.9, render: { fillStyle: '#94a3b8' } });
+      const rightWheel = Bodies.circle(x + carCfg.axle, y + 20, carCfg.wheelR, { collisionFilter: { group }, friction: 0.9, render: { fillStyle: '#94a3b8' } });
+      const springL = Constraint.create({ bodyA: chassis, pointA: { x: -carCfg.axle, y: 10 }, bodyB: leftWheel, length: carCfg.spring.len, stiffness: carCfg.spring.stiff, damping: carCfg.spring.damp });
+      const springR = Constraint.create({ bodyA: chassis, pointA: { x: carCfg.axle, y: 10 }, bodyB: rightWheel, length: carCfg.spring.len, stiffness: carCfg.spring.stiff, damping: carCfg.spring.damp });
+      World.add(engine.world, [chassis, leftWheel, rightWheel, springL, springR]);
+      console.log("Car created at:", x, y);
+      return { chassis, leftWheel, rightWheel };
     }
-    const car = makeCar(carCfg.x, carCfg.y);
+    const car = createCar(carCfg.xStart, carCfg.yStart);
 
-    // Setup initial terrain
     addTerrain(800);
 
     // Controls
@@ -92,29 +97,30 @@
     });
 
     Events.on(engine, 'beforeUpdate', () => {
-      if (keys.right) { Body.applyTorque(car.wl, carCfg.torque); Body.applyTorque(car.wr, carCfg.torque); }
-      if (keys.left)  { Body.applyTorque(car.wl, -carCfg.torque); Body.applyTorque(car.wr, -carCfg.torque); }
+      if (keys.right) { Body.applyTorque(car.leftWheel, carCfg.torque); Body.applyTorque(car.rightWheel, carCfg.torque); }
+      if (keys.left) { Body.applyTorque(car.leftWheel, -carCfg.torque); Body.applyTorque(car.rightWheel, -carCfg.torque); }
     });
 
-    // Camera & HUD
-    const distEl = document.getElementById('hud');
-    Events.on(engine, 'afterUpdate', e => {
+    // Camera & HUD updates
+    const hud = document.getElementById('hud');
+    Events.on(engine, 'afterUpdate', () => {
       addTerrain(car.chassis.position.x + 400);
-      const distance = Math.max(0, Math.floor(car.chassis.position.x - carCfg.x));
-      distEl.textContent = `Distance: ${distance} m`;
+      const dist = Math.max(0, Math.floor(car.chassis.position.x - carCfg.xStart));
+      hud.textContent = `Distance: ${dist} m`;
       Render.lookAt(render, car.chassis, { x: render.options.width / 2, y: render.options.height / 2 });
     });
 
-    // Start logic
+    // Start overlay logic
     const overlay = document.getElementById('overlay');
     const startBtn = document.getElementById('startBtn');
     function startGame() {
       if (!overlay.classList.contains('hidden')) {
         overlay.classList.add('hidden');
-        console.log("Game started!");
+        console.log("Game started via action.");
       }
     }
-    startBtn.onclick = () => { console.log("Start button clicked"); startGame(); };
+    startBtn.addEventListener('click', () => { console.log("Start button clicked"); startGame(); });
+
   </script>
 </body>
 </html>
